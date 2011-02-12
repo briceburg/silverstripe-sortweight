@@ -1,21 +1,7 @@
 <?php
 class SortWeightDecoration extends DataObjectDecorator {
-	public function extraStatics($class = null)
-	{
-		if(!$class)
-		{
-			$class = $this->owner->class;
-		}
 
-		$statics = array();
-
-		if(isset(SortWeightRegistry::$add_weight_columns[$class]))
-		{
-			$statics['db'] = array('SortWeight' => 'Int');
-		}
-
-		return $statics;
-	}
+	static $new_tables = array();
 
 	function updateSummaryFields(&$fields){
 		// TODO: any way to detect relation / name of complex table field --
@@ -32,11 +18,14 @@ class SortWeightDecoration extends DataObjectDecorator {
 
 	function augmentDatabase(){
 
-		$set = false;
+		if(!isset(SortWeightRegistry::$relations[$this->owner->class]))
+		{
+			return;
+		}
 
 		foreach(SortWeightRegistry::$relations[$this->owner->class] as $relationName => $relationClass)
 		{
-			$table = $this->owner->class . '_SortWeight' . $relationName;
+			$table = $this->getDBTableName($relationName);
 			$db = array(
 				"Weight"					=>	'Int',
 				"{$this->owner->class}ID"	=>	'Int',
@@ -49,29 +38,43 @@ class SortWeightDecoration extends DataObjectDecorator {
 				"class-relation"			=>	array('type' => 'unique', 'value' => "{$this->owner->class}ID,{$relationClass}ID")
 			);
 
-			if(DB::getConn()->hasTable($table))
+			if(!DB::getConn()->hasTable($table))
 			{
 				DB::requireTable($table, $db, $indexes);
-			}
-			else
-			{
-				// TODO: there's a bug w/ index creation... it works w/ requiretable, but not createtable?? for now,
-				//   workarond by calling /dev/build twice (first to create table, 2nd to introduce indexes)....
-				DB::createTable($table, $db);
-
-				if(!$set && !$set = DataObject::get($this->owner->class))
+				if(!isset(self::$new_tables[$this->owner->class]))
 				{
-					continue;
+					self::$new_tables[$this->owner->class] = array();
 				}
-
-				foreach($set as $obj)
-				{
-					$this->initialPopulation($obj,true);
-				}
+				self::$new_tables[$this->owner->class][] = $relationName;
 			}
 
 		}
+	}
 
+	function requireDefaultRecords(){
+		if(isset(self::$new_tables[$this->owner->class]))
+		{
+
+			foreach(self::$new_tables[$this->owner->class] as $relationName)
+			{
+				$table = $this->getDBTableName($relationName);
+
+				$do = singleton($this->owner->class);
+				$components = $do->$relationName();
+
+				if(!$components->is_a('DataObjectSet'))
+				{
+					$components = new DataObjectSet($components);
+				}
+
+				foreach($components as $component)
+				{
+					DB::query("INSERT INTO $table (\"Weight\",\"{$do->class}ID\",\"{$relationClass}ID\") SELECT count(*)+1, {$do->ID}, {$component->ID}  FROM \"$table\" WHERE \"{$relationClass}ID\" = {$component->ID}");
+				}
+			}
+
+			unset(self::$new_tables[$this->owner->class]);
+		}
 	}
 
 	function augmentSQL(&$query) {
@@ -118,7 +121,7 @@ class SortWeightDecoration extends DataObjectDecorator {
 
 					if($relationName)
 					{
-						$table = $this->owner->class . '_SortWeight' . $relationName;
+						$table = $this->getDBTableName($relationName);
 						$relationClass = SortWeightRegistry::$relations[$this->owner->class][$relationName];
 
 						$query->leftJoin($table,"\"$table\".\"{$relationClass}ID\" = '{$value}' AND \"$table\".\"{$this->owner->class}ID\" = \"{$this->owner->class}\".\"ID\"");
@@ -137,20 +140,11 @@ class SortWeightDecoration extends DataObjectDecorator {
 		}
 	}
 
-
-	// purpose is to create initial sort weight values when object is saved.
-	// TODO: perhaps we can skip this & rely solely on ctf w/ default sort values.. (can get weighty on memory / db -- esp. w/ large amounts of relations)
-	public function onAfterWrite(){
-		parent::onAfterWrite();
-		$this->initialPopulation($this->owner);
-	}
-
-
 	public function onBeforeDelete() {
 		parent::onBeforeDelete();
 		foreach(SortWeightRegistry::$relations[$this->owner->class] as $relationName => $relationClass)
 		{
-			$table = $this->owner->class . '_SortWeight' . $relationName;
+			$table = $this->getDBTableName($relationName);
 			DB::query("DELETE FROM $table WHERE \"{$this->owner->class}ID\" = {$this->owner->ID}");
 		}
 	}
@@ -159,38 +153,9 @@ class SortWeightDecoration extends DataObjectDecorator {
 		return $this->owner->class . ' ' . $this->owner->ID;
 	}
 
-/*	function getRelationSortWeights($a = null, $b = null, $c = null)
+	function getDBTableName($relationName)
 	{
-		$weights = new ViewableData();
-		// TODO: optimize this -- we probably don't even need to do the select, but only do it on weight changes
-		foreach(SortWeightRegistry::$relations[$this->owner->class] as $relationName => $relationClass) {
-			//$weights->$relationName = $this->getRelationSortWeight($relationName);
-		}
-s
-		return $weights;
-	}*/
-
-	private function initialPopulation(DataObject $do, $skipCheck = false)
-	{
-		// TODO: for efficiency; use an INSERT SELECT here?
-		foreach(SortWeightRegistry::$relations[$do->class] as $relationName => $relationClass)
-		{
-			$components = $do->$relationName();
-
-			if(!$components->is_a('DataObjectSet'))
-			{
-				$components = new DataObjectSet($components);
-			}
-
-			foreach($components as $component)
-			{
-				$table = $do->class . '_SortWeight' . $relationName;
-				// TODO: could use a replace into -- although only tested on MySQL -- compat w/ pg && sql srvr?
-				if($skipCheck || !(bool) DB::query("SELECT count(*) FROM \"$table\" WHERE \"{$do->class}ID\" = {$do->ID} AND \"{$relationClass}ID\" = {$component->ID}")->value())
-				{
-					DB::query("INSERT INTO $table (\"Weight\",\"{$do->class}ID\",\"{$relationClass}ID\") SELECT count(*)+1, {$do->ID}, {$component->ID}  FROM \"$table\" WHERE \"{$relationClass}ID\" = {$component->ID}");
-				}
-			}
-		}
+		return $this->owner->class . '_SortWeight' . $relationName;
 	}
+
 }

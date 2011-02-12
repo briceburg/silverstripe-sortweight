@@ -20,37 +20,40 @@ class SortWeightRegistry {
 		}
 
 		// if relationName is false, enable the sorting on object iteslf (skip SortWeight map)
-		if($relationName === null)
+		if(!class_exists($class) || !$sng = new $class())
 		{
-			self::$add_weight_columns[$class] = true;
+			user_error('Unknown class passed (' . $class .')', E_USER_WARNING);
+		}
+		elseif($relationName === null )
+		{
+			user_error('You must provide the Component to order for ' . $class, E_USER_WARNING);
+		}
+		elseif(!$sng->hasMethod($relationName) || !$component = $sng->$relationName())
+		{
+			user_error('Component "' . $relationName . '" must exist on ' . $class,E_USER_WARNING);
+		}
+		elseif(isset(self::$relations[$class][$relationName]))
+		{
+			user_error('Component "' . $relationName . '" already decorates ' . $class,E_USER_WARNING);
 		}
 		else
 		{
-			// TODO: rensure relationName is a valid method on class
-			if(!$component = singleton($class)->$relationName())
-			{
-				user_error('Component ' . $relationName . ' must exist on ' . $class,E_USER_WARNING);
-			}
-			elseif(isset(self::$relations[$class][$relationName]))
-			{
-				user_error('Component ' . $relationName . ' already decorates ' . $class,E_USER_WARNING);
-			}
-
-
 			$relationClass = ($component->is_a('ComponentSet')) ?
 				$component->childClass : $component->class;
 
 			self::$relations[$class][$relationName] = $relationClass;
+
+
+			$current_sort = Object::get_static($relationClass, 'default_sort');
+			if(self::$override_default_sort || empty($current_sort))
+			{
+				Object::set_static($class,'default_sort','SortWeight ' . self::$direction);
+			}
+
+			return Object::add_extension($class,'SortWeightDecoration');
 		}
 
-		$current_sort = Object::get_static($class, 'default_sort');
-		if(self::$override_default_sort || empty($current_sort))
-		{
-			// TODO: this doesn't seem to register
-			Object::add_static_var($class,'default_sort','SortWeight ' . self::$direction);
-		}
-
-		Object::add_extension($class,'SortWeightDecoration');
+		return user_error('SortWeight decoration failed for ' . __CLASS__ . '::' . __FUNCTION__ . "(\"$class\",\"$relationName\")",E_USER_WARNING);
 
 	}
 

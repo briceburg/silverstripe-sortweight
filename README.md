@@ -8,9 +8,9 @@
  * SilverStripe 2.4.x
 
 ## Overview
-Allows easy, cms-based ordering of objects in has-many and many-many relationships.
+Allows easy ordering of objects in has-many and many-many relationships. 
 
-Version 0.01 alpha
+Version 0.02 (alpha)
 
 
 ### Features
@@ -19,9 +19,7 @@ Version 0.01 alpha
  
  * Does not require DataObjectManager
  
- * Supports ordering of components in has-many and many-many relationships
- 
- * Supports ordering of basic `Dataobject::get('MyObject');` returns
+ * Supports ordering of components in has-many and many-many relationship getters [ e.g. $set = $Artist->Albums(); will return properly ordered Albums ]
 
  * Unobtrusively drops into Silverstripe -- automatically extends ComplexTableField and _DataObjectManger (coming)_
  
@@ -31,7 +29,7 @@ Version 0.01 alpha
   * [YouTube video ID: NQC_L71EuW0](http://www.youtube.com/watch?v=NQC_L71EuW0)
   
 	
-### Configuration
+### Configuration & Usage
 
  * Coming soon. See _config.php for an example.
 
