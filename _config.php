@@ -1,7 +1,6 @@
 <?php
 // EXAMPLE
-// SortWeightRegistry::decorate('WCCChoice','Question');
-
+//SortWeightRegistry::decorate('Artist','Albums');
 
 
 // DO NOT EDIT/REMOVE BELOW THIS COMMENT

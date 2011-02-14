@@ -1,7 +1,7 @@
 <?php
 class SortWeightDecoration extends DataObjectDecorator {
 
-	static $new_tables = array();
+	private static $new_tables = array();
 
 	function updateSummaryFields(&$fields){
 		// TODO: any way to detect relation / name of complex table field --
@@ -17,126 +17,80 @@ class SortWeightDecoration extends DataObjectDecorator {
 	}
 
 	function augmentDatabase(){
-
-		if(!isset(SortWeightRegistry::$relations[$this->owner->class]))
+		foreach($this->getRelations() as $relations)
 		{
-			return;
-		}
-
-		foreach(SortWeightRegistry::$relations[$this->owner->class] as $relationName => $relationClass)
-		{
-			$table = $this->getDBTableName($relationName);
+			list($class, $relationName, $relationClass) = $relations;
+			$table = $this->getDBTableName($relationName, $class);
 			$db = array(
-				"Weight"					=>	'Int',
-				"{$this->owner->class}ID"	=>	'Int',
-				"{$relationClass}ID"		=>	'Int'
+				"SortWeight"				=>	'Int',
+				"sw{$class}ID"				=>	'Int',
+				"sw{$relationClass}ID"		=>	'Int'
 			);
 
 			$indexes = array(
-				"{$this->owner->class}ID"	=>	true,
-				"{$relationClass}ID"		=>	true,
-				"class-relation"			=>	array('type' => 'unique', 'value' => "{$this->owner->class}ID,{$relationClass}ID")
+				"sw{$class}ID"	=>	true,
+				"sw{$relationClass}ID"		=>	true,
+				"class-relation"			=>	array('type' => 'unique', 'value' => "sw{$class}ID,sw{$relationClass}ID")
 			);
 
 			if(!DB::getConn()->hasTable($table))
 			{
 				DB::requireTable($table, $db, $indexes);
-				if(!isset(self::$new_tables[$this->owner->class]))
-				{
-					self::$new_tables[$this->owner->class] = array();
-				}
-				self::$new_tables[$this->owner->class][] = $relationName;
+				self::$new_tables[] = $relations;
 			}
-
 		}
 	}
 
 	function requireDefaultRecords(){
-		if(isset(self::$new_tables[$this->owner->class]))
+		foreach(self::$new_tables as $relations)
 		{
+			list($class, $relationName, $relationClass) = $relations;
 
-			foreach(self::$new_tables[$this->owner->class] as $relationName)
+			$table = $this->getDBTableName($relationName);
+
+			$do = singleton($class);
+			$components = $do->$relationName();
+
+			if(!$components->is_a('DataObjectSet'))
 			{
-				$table = $this->getDBTableName($relationName);
-
-				$do = singleton($this->owner->class);
-				$components = $do->$relationName();
-
-				if(!$components->is_a('DataObjectSet'))
-				{
-					$components = new DataObjectSet($components);
-				}
-
-				foreach($components as $component)
-				{
-					DB::query("INSERT INTO $table (\"Weight\",\"{$do->class}ID\",\"{$relationClass}ID\") SELECT count(*)+1, {$do->ID}, {$component->ID}  FROM \"$table\" WHERE \"{$relationClass}ID\" = {$component->ID}");
-				}
+				$components = new DataObjectSet($components);
 			}
 
-			unset(self::$new_tables[$this->owner->class]);
+			foreach($components as $component)
+			{
+				DB::query("INSERT INTO $table (\"SortWeight\",\"sw{$class}ID\",\"sw{$relationClass}ID\") SELECT count(*)+1, {$do->ID}, {$component->ID}  FROM \"$table\" WHERE \"sw{$relationClass}ID\" = {$component->ID}");
+			}
 		}
 	}
 
 	function augmentSQL(&$query) {
-		//TODO: do not augment when getting a specific record... (e.g. why add sortorder?)
-		//		be sure to include cases for WHERE ClassID IN (...,...,...)
-		if(empty($query->select) || $query->delete)
-			return;
 
-		if(empty($query->orderby) || $query->orderby == 'SortWeight')
+		if(empty($query->orderby) ||$query->orderby == '[SortWeight]')
 		{
-			// detect the relationship -- TODO: detection is very fragile! any way to properly hint this?
-			//     prefer core patch to DataObject & SQLQuery: SQLQuery to holde reference of dataobject ($query->record?)			//
 
-			//   scheme examines the query filter, trying to find a relation match in the registry.
-			//   accounts for has_many & many_many relations
-			foreach($query->where as $sql)
+			// relationship getters from DataObject
+			$filter = array(
+				'getManyManyComponents',
+				'getComponents'
+			);
+
+			foreach(SS_Backtrace::filtered_backtrace() as $bt)
 			{
-				// parses strings like:
-				//  [has_many] '"QuestionID" = '1''  ==>  array('Question','1')
-				//  [many_many] '"WCCQuestion_Choices"."WCCQuestionID" = 1'  ==>  array('WCCQuestion','1')
-				//  [multi-where] "QuestionID" = '1' AND "Correct" = 1 AND "Place" = 1
-
-				preg_match_all('/(.*?)( AND|and|OR|or )/',$sql,$wheres);
-				if(empty($wheres[1]))
+				if(in_array($bt['function'],$filter) && $bt['class'] == 'DataObject')
 				{
-					$wheres[1][] = $sql;
-				}
-
-				foreach($wheres[1] as $sql)
-				{
-					$parts = explode('=', $sql);
-					if(!isset($parts[1]) || !$pos = strrpos($parts[0],'ID'))
+					foreach($this->getRelations($bt['object']->class) as $relations)
 					{
-						continue;
-					}
-
-	 				$parts[0] = substr(substr($parts[0],0,$pos),(int) strrpos($parts[0],'.') + 1);
-
-					$joinClass = trim($parts[0],'"\' ');
-					$value = trim($parts[1],'"\' ');
-
-					$relationName = (isset(SortWeightRegistry::$relations[$this->owner->class][$joinClass])) ?
-						$joinClass : array_search($joinClass,SortWeightRegistry::$relations[$this->owner->class]);
-
-					if($relationName)
-					{
-						$table = $this->getDBTableName($relationName);
-						$relationClass = SortWeightRegistry::$relations[$this->owner->class][$relationName];
-
-						$query->leftJoin($table,"\"$table\".\"{$relationClass}ID\" = '{$value}' AND \"$table\".\"{$this->owner->class}ID\" = \"{$this->owner->class}\".\"ID\"");
-						$query->orderby("\"$table\".\"Weight\" " . SortWeightRegistry::$direction);
+						list($class, $relationName, $relationClass) = $relations;
+						$table = $this->getDBTableName($relationName,$class);
+						$query->leftJoin($table,"\"$table\".\"sw{$class}ID\" = '{$bt['object']->ID}' AND \"$table\".\"sw{$relationClass}ID\" = \"{$relationClass}\".\"ID\"");
+						$query->orderby("\"$table\".\"SortWeight\" " . SortWeightRegistry::$direction);
 						return;
 					}
 				}
 			}
 
-			// no relation found -- attempt to use SortWeight
-			if(empty($query->orderby) && isset($query->select['SortWeight']))
-			{
-				$query->orderby("\"{$this->owner->class}\".\"SortWeight\" " . SortWeightRegistry::$direction);
-			}
-
+			$query->orderby = (isset(SortWeightRegistry::$default_sorts[$this->owner->class])) ?
+				SortWeightRegistry::$default_sorts[$this->owner->class] : null;
 		}
 	}
 
@@ -145,7 +99,7 @@ class SortWeightDecoration extends DataObjectDecorator {
 		foreach(SortWeightRegistry::$relations[$this->owner->class] as $relationName => $relationClass)
 		{
 			$table = $this->getDBTableName($relationName);
-			DB::query("DELETE FROM $table WHERE \"{$this->owner->class}ID\" = {$this->owner->ID}");
+			DB::query("DELETE FROM $table WHERE \"sw{$this->owner->class}ID\" = {$this->owner->ID}");
 		}
 	}
 
@@ -153,9 +107,30 @@ class SortWeightDecoration extends DataObjectDecorator {
 		return $this->owner->class . ' ' . $this->owner->ID;
 	}
 
-	function getDBTableName($relationName)
+	function getDBTableName($relationName, $class = null)
 	{
-		return $this->owner->class . '_SortWeight' . $relationName;
+		return ($class) ?
+			$class . '_' . $relationName . 'Weight' :
+			$this->owner->class . '_' . $relationName . 'Weight';
+	}
+
+	private function getRelations($classname = null)
+	{
+		$out = array();
+		foreach(SortWeightRegistry::$relations as $class => $relations)
+		{
+			if($classname && $classname != $class)
+				continue;
+
+			foreach($relations as $relationName => $relationClass)
+			{
+				if($relationClass == $this->owner->class)
+				{
+					$out[] = array($class, $relationName, $relationClass);
+				}
+			}
+		}
+		return $out;
 	}
 
 }

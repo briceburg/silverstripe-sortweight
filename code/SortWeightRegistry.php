@@ -3,8 +3,9 @@ class SortWeightRegistry {
 
 	public static $override_default_sort = true;
 	public static $relations = array();
+	public static $default_sorts = array();				// original default_sort
 	public static $add_weight_columns = array();
-	public static $direction = 'ASC';		// ASC || DESC
+	public static $direction = 'ASC';					// ASC || DESC
 	public static $module_path;
 
 	public static function set_module_path($directory)
@@ -43,21 +44,25 @@ class SortWeightRegistry {
 
 			self::$relations[$class][$relationName] = $relationClass;
 
-
 			$current_sort = Object::get_static($relationClass, 'default_sort');
 			if(self::$override_default_sort || empty($current_sort))
 			{
-				Object::set_static($class,'default_sort','SortWeight ' . self::$direction);
+				Object::set_static($relationClass,'default_sort','[SortWeight]');
+				if($current_sort != '[SortWeight]')
+				{
+					self::$default_sorts[$relationClass] = $current_sort;
+				}
 			}
 
-			return Object::add_extension($class,'SortWeightDecoration');
+			if(!Object::has_extension($relationClass,'SortWeightDecoration'))
+			{
+				Object::add_extension($relationClass,'SortWeightDecoration');
+			}
+
+			return;
 		}
 
 		return user_error('SortWeight decoration failed for ' . __CLASS__ . '::' . __FUNCTION__ . "(\"$class\",\"$relationName\")",E_USER_WARNING);
 
 	}
-
-
 }
-
-

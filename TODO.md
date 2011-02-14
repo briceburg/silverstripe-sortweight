@@ -4,3 +4,4 @@
   * Use local distribution of jQuery-UI when included in core/sapphire (currently SS_DateField? uses Googleapis & thus so do we!)
   * Allow ordering in ModelAdmin? Search Results (apply Javascript Interface)
   * _core_ - Apply "hinting" patches to make SQL builders more efficient & reliable.
+  * re-implement ordering of the native dataobject (e.g. add a "SortWeight" CMS field for use in DataObject::get(NativeObject); )  
