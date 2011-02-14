@@ -8,10 +8,8 @@ class SortWeightDecoration extends DataObjectDecorator {
 		//    possible core patch.
 
 		$fields['SortWeight'] = 'Sort Order';
-		// NOTE: SS 2.4.2 does not take advantage of jquery-ui in core, but links to the below 1.8.1 versions
-		//  in DateField. Using the same for potential cache reasons. TODO: look to update this in future SS verions..
-		Requirements::css('http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.1/themes/smoothness/jquery-ui.css');
-		Requirements::javascript('http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.1/jquery-ui.min.js');
+		Requirements::css(THIRDPARTY_DIR . '/jquery-ui-themes/smoothness/jquery.ui.all.css');
+		Requirements::javascript(SAPPHIRE_DIR . '/thirdparty/jquery-ui/jquery.ui.core.js');
 
 		Requirements::javascript(SortWeightRegistry::$module_path . "/javascript/SortWeightFields.js");
 	}
@@ -88,7 +86,6 @@ class SortWeightDecoration extends DataObjectDecorator {
 					}
 				}
 			}
-
 			$query->orderby = (isset(SortWeightRegistry::$default_sorts[$this->owner->class])) ?
 				SortWeightRegistry::$default_sorts[$this->owner->class] : null;
 		}
