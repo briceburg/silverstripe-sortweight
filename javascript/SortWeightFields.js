@@ -4,7 +4,6 @@ SortWeightField.prototype = {
 		var $ = jQuery,
 			tbody = $(this).closest('tbody')[0],
 			e = $(this),
-			TableHref = e.closest('div.TableListField').attr('href').replace(/\//g,"|"), // TODO: unit test against CTF or [better] patch CTF to provide reliable relation hint.s
 			APIURL = 'SortWeight_Controller';  
 		
 		// initialize sorting
@@ -20,7 +19,7 @@ SortWeightField.prototype = {
 					var e = $('td.SortWeight',ui.item).html('<img src="cms/images/network-save.gif" />'),
 						above = $('td.SortWeight',$(ui.item).prev('tr')),
 						below = $('td.SortWeight',$(ui.item).next('tr')),
-						URL = APIURL + '/' + e.attr('rel') + '/NextTo/' + TableHref + '/';
+						URL = APIURL + '/' + e.attr('rel') + '/NextTo/';
 					
 					if(above.length > 0 && below.length > 0)
 					{
@@ -46,11 +45,10 @@ SortWeightField.prototype = {
 		// TODO: refactor using OO to get rid of redundancy
 		$('div',e).click(function(){
 			var e = $(this);
-			console.log(e);
 			if(e.is('.ui-icon-arrowthickstop-1-n'))
 			{
 				var e = e.parent().html('<img src="cms/images/network-save.gif" />'),
-					URL = APIURL + '/' + e.attr('rel') + '/ToTop/' + TableHref;
+					URL = APIURL + '/' + e.attr('rel') + '/ToTop/';
 				
 				$.getJSON(URL, function(json){
 					e.closest('div.TableListField')[0].refresh();
@@ -58,7 +56,7 @@ SortWeightField.prototype = {
 			}
 			else if(e.is('.ui-icon-arrowthickstop-1-s')) {
 				var e = e.parent().html('<img src="cms/images/network-save.gif" />'),
-				URL = APIURL + '/' + e.attr('rel') + '/ToBottom/' + TableHref;
+				URL = APIURL + '/' + e.attr('rel') + '/ToBottom/';
 			
 				$.getJSON(URL, function(json){
 					e.closest('div.TableListField')[0].refresh();

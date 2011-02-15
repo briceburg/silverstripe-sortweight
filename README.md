@@ -10,7 +10,7 @@
 ## Overview
 Allows easy ordering of objects in has-many and many-many relationships. 
 
-Version 0.03 (alpha)
+Version 0.1 (beta)
 
 
 ### Features
